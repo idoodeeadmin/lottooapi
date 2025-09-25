@@ -581,8 +581,9 @@ app.post("/generate", async (req, res) => {
     const lottoNumbers = generateLottoNumbers(); // ฟังก์ชันของคุณ
 
     // INSERT bulk
-    const values = lottoNumbers.map(num => [num, newRound]);
-    await db.query("INSERT INTO lotto (number, round) VALUES ?", [values]);
+const values = lottoNumbers.map(num => `('${num}', ${newRound})`).join(', ');
+const sql = `INSERT INTO lotto (number, round) VALUES ${values}`;
+await db.execute(sql);
 
     res.json({ round: newRound, lottoNumbers, message: "สร้าง Lotto เสร็จแล้ว 🎉" });
   } catch (err) {

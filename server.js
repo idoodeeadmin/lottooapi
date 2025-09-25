@@ -535,9 +535,8 @@ app.post("/reset-system", async (req, res) => {
 // Current round = ล่าสุดที่ออกรางวัลแล้ว
 app.get("/current-round", async (req, res) => {
   try {
-    // ใช้ตาราง lotto แทน prize
-    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
-    const currentRound = rows[0]?.maxRound || 0; // ถ้ายังไม่มีเลขใด ให้เริ่มที่ 0
+    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM prize");
+    const currentRound = rows[0]?.maxRound || 0;
     res.json({ round: currentRound });
   } catch (err) {
     console.error(err);
@@ -572,31 +571,24 @@ app.get("/prize/:round", async (req, res) => {
 // Generate lotto
 app.post("/generate", async (req, res) => {
   try {
-    // 1. ดึงงวดล่าสุด
-    const [rows] = await db.execute("SELECT MAX(round) AS round FROM lotto");
-    const lastRound = rows[0].round || 0;
-    const newRound = lastRound + 1;
+    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
+    const round = (rows[0]?.maxRound || 0) + 1;
 
-    // 2. สร้างเลข lotto
-    const lottoNumbers = generateLottoNumbers(); // ฟังก์ชันของคุณ
+    if (round > 1) {
+      const prevRound = round - 1;
+      const [prizeCountResult] = await db.execute("SELECT COUNT(*) as cnt FROM prize WHERE round = ?", [prevRound]);
+      if (prizeCountResult[0].cnt === 0) {
+        return res.status(400).json({ message: `ยังไม่ได้ออกรางวัลงวดที่ ${prevRound}` });
+      }
+    }
 
-    // 3. เตรียม placeholders และ params สำหรับ bulk insert
-    const placeholders = lottoNumbers.map(() => "(?, ?)").join(", ");
-    const params = [];
-    lottoNumbers.forEach(num => params.push(num, newRound));
-
-    // 4. execute bulk insert
-    await db.execute(`INSERT INTO lotto (number, round) VALUES ${placeholders}`, params);
-
-    res.json({ round: newRound, lottoNumbers, message: "สร้าง Lotto เสร็จแล้ว 🎉" });
-  } catch (err) {
-    console.error("Generate Lotto Error:", err);
-    res.status(500).json({ message: "ไม่สามารถสร้าง Lotto ได้", error: err.message });
+    const lottoNumbers = await generateLotto(round, 100);
+    res.json({ message: `สร้าง Lotto งวด ${round} จำนวน ${lottoNumbers.length} ใบสำเร็จ 🎉`, lottoNumbers, round });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "เกิดข้อผิดพลาดขณะสร้าง Lotto" });
   }
 });
-
-
-
 
 // Draw prizes
 app.post("/draw-prizes/:round", async (req, res) => {

@@ -572,23 +572,26 @@ app.get("/prize/:round", async (req, res) => {
 // Generate lotto
 app.post("/generate", async (req, res) => {
   try {
-    // ดึงงวดล่าสุด
+    // 1. ดึงงวดล่าสุด
     const [rows] = await db.execute("SELECT MAX(round) AS round FROM lotto");
     const lastRound = rows[0].round || 0;
     const newRound = lastRound + 1;
 
-    // สร้างตัวเลข lotto ใหม่
+    // 2. สร้างเลข lotto
     const lottoNumbers = generateLottoNumbers(); // ฟังก์ชันของคุณ
 
-    // INSERT bulk
-const values = lottoNumbers.map(num => `('${num}', ${newRound})`).join(', ');
-const sql = `INSERT INTO lotto (number, round) VALUES ${values}`;
-await db.execute(sql);
+    // 3. เตรียม placeholders และ params สำหรับ bulk insert
+    const placeholders = lottoNumbers.map(() => "(?, ?)").join(", ");
+    const params = [];
+    lottoNumbers.forEach(num => params.push(num, newRound));
+
+    // 4. execute bulk insert
+    await db.execute(`INSERT INTO lotto (number, round) VALUES ${placeholders}`, params);
 
     res.json({ round: newRound, lottoNumbers, message: "สร้าง Lotto เสร็จแล้ว 🎉" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "ไม่สามารถสร้าง Lotto ได้" });
+    console.error("Generate Lotto Error:", err);
+    res.status(500).json({ message: "ไม่สามารถสร้าง Lotto ได้", error: err.message });
   }
 });
 

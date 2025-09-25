@@ -535,8 +535,9 @@ app.post("/reset-system", async (req, res) => {
 // Current round = ล่าสุดที่ออกรางวัลแล้ว
 app.get("/current-round", async (req, res) => {
   try {
-    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM prize");
-    const currentRound = rows[0]?.maxRound || 0;
+    // ใช้ตาราง lotto แทน prize
+    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
+    const currentRound = rows[0]?.maxRound || 0; // ถ้ายังไม่มีเลขใด ให้เริ่มที่ 0
     res.json({ round: currentRound });
   } catch (err) {
     console.error(err);
@@ -571,30 +572,25 @@ app.get("/prize/:round", async (req, res) => {
 // Generate lotto
 app.post("/generate", async (req, res) => {
   try {
-    // 1. งวดที่เคยออกรางวัลแล้ว
-    const [prizeRows] = await db.execute("SELECT MAX(round) as maxRound FROM prize");
-    const lastPrizeRound = prizeRows[0]?.maxRound || 0;
+    // ดึงงวดล่าสุด
+    const [rows] = await db.execute("SELECT MAX(round) AS round FROM lotto");
+    const lastRound = rows[0].round || 0;
+    const newRound = lastRound + 1;
 
-    // 2. งวดที่เคยสร้าง lotto แล้ว
-    const [lottoRows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
-    const lastLottoRound = lottoRows[0]?.maxRound || 0;
+    // สร้างตัวเลข lotto ใหม่
+    const lottoNumbers = generateLottoNumbers(); // ฟังก์ชันของคุณ
 
-    // 3. เลือกงวดถัดไปให้ต่อเนื่อง
-    const currentMax = Math.max(lastPrizeRound, lastLottoRound);
-    const nextRound = currentMax + 1;
+    // INSERT bulk
+    const values = lottoNumbers.map(num => [num, newRound]);
+    await db.query("INSERT INTO lotto (number, round) VALUES ?", [values]);
 
-    const lottoNumbers = await generateLotto(nextRound, 100);
-
-    res.json({
-      message: `สร้าง Lotto งวด ${nextRound} จำนวน ${lottoNumbers.length} ใบสำเร็จ 🎉`,
-      lottoNumbers,
-      round: nextRound
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ message: "เกิดข้อผิดพลาดขณะสร้าง Lotto" });
+    res.json({ round: newRound, lottoNumbers, message: "สร้าง Lotto เสร็จแล้ว 🎉" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "ไม่สามารถสร้าง Lotto ได้" });
   }
 });
+
 
 
 

@@ -209,16 +209,17 @@ async function drawPrizes(round) {
 
 // Register
 app.post("/register", async (req, res) => {
-  const { fullname, phone, email, password } = req.body;
+  const { fullname, phone, email, password, wallet_balance } = req.body;
   if (!fullname || !phone || !email || !password) {
     return res.status(400).json({ message: "กรุณากรอกข้อมูลให้ครบถ้วน" });
   }
 
   try {
     const hashedPassword = await hashPassword(password);
+    const initialWallet = wallet_balance ?? 0; // ถ้าไม่ได้ส่งมาก็ใช้ 0
     const [result] = await db.execute(
       `INSERT INTO customer (fullname, phone, email, password, wallet_balance, role) VALUES (?, ?, ?, ?, ?, ?)`,
-      [fullname, phone, email, hashedPassword, 0, 'user'] // wallet_balance เริ่มที่ 0, role เป็น user เสมอ
+      [fullname, phone, email, hashedPassword, initialWallet, 'user']
     );
 
     res.status(201).json({
@@ -227,7 +228,7 @@ app.post("/register", async (req, res) => {
       fullname,
       phone,
       email,
-      wallet_balance: 0,
+      wallet_balance: initialWallet,
       role: 'user',
     });
   } catch (err) {

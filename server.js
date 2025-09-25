@@ -571,24 +571,32 @@ app.get("/prize/:round", async (req, res) => {
 // Generate lotto
 app.post("/generate", async (req, res) => {
   try {
-    const [rows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
-    const round = (rows[0]?.maxRound || 0) + 1;
+    // 1. งวดที่เคยออกรางวัลแล้ว
+    const [prizeRows] = await db.execute("SELECT MAX(round) as maxRound FROM prize");
+    const lastPrizeRound = prizeRows[0]?.maxRound || 0;
 
-    if (round > 1) {
-      const prevRound = round - 1;
-      const [prizeCountResult] = await db.execute("SELECT COUNT(*) as cnt FROM prize WHERE round = ?", [prevRound]);
-      if (prizeCountResult[0].cnt === 0) {
-        return res.status(400).json({ message: `ยังไม่ได้ออกรางวัลงวดที่ ${prevRound}` });
-      }
-    }
+    // 2. งวดที่เคยสร้าง lotto แล้ว
+    const [lottoRows] = await db.execute("SELECT MAX(round) as maxRound FROM lotto");
+    const lastLottoRound = lottoRows[0]?.maxRound || 0;
 
-    const lottoNumbers = await generateLotto(round, 100);
-    res.json({ message: `สร้าง Lotto งวด ${round} จำนวน ${lottoNumbers.length} ใบสำเร็จ 🎉`, lottoNumbers, round });
+    // 3. เลือกงวดถัดไปให้ต่อเนื่อง
+    const currentMax = Math.max(lastPrizeRound, lastLottoRound);
+    const nextRound = currentMax + 1;
+
+    const lottoNumbers = await generateLotto(nextRound, 100);
+
+    res.json({
+      message: `สร้าง Lotto งวด ${nextRound} จำนวน ${lottoNumbers.length} ใบสำเร็จ 🎉`,
+      lottoNumbers,
+      round: nextRound
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "เกิดข้อผิดพลาดขณะสร้าง Lotto" });
   }
 });
+
+
 
 // Draw prizes
 app.post("/draw-prizes/:round", async (req, res) => {
